@@ -104,6 +104,25 @@ describe ActsAsTenant do
     end
   end
 
+  describe "acts_as_tenant :through" do
+    let(:account) { accounts(:abc) }
+
+    it "should scope User.all to the current tenant if set" do
+      ActsAsTenant.current_tenant = account
+      expect(User.count).to eq(account.users.count)
+      expect(User.all).to eq(account.users)
+    end
+
+    it "should return all users when no current tenant is set" do
+      expect(User.count).to eq(3)
+    end
+
+    it "should allow unscoping" do
+      ActsAsTenant.current_tenant = account
+      expect(User.unscoped.count).to be > account.users.count
+    end
+  end
+
   describe "A tenant model with global records" do
     before do
       ActsAsTenant.current_tenant = account
@@ -345,6 +364,29 @@ describe ActsAsTenant do
       ActsAsTenant.current_tenant = account
       ActsAsTenant.without_tenant {}
       expect(ActsAsTenant.current_tenant).to eq(account)
+    end
+
+    it "should set test_tenant to nil inside the block" do
+      ActsAsTenant.test_tenant = account
+      ActsAsTenant.without_tenant do
+        expect(ActsAsTenant.test_tenant).to be_nil
+      end
+    end
+
+    it "should set test_tenant to nil even if default_tenant is set" do
+      old_default_tenant = ActsAsTenant.default_tenant
+      ActsAsTenant.default_tenant = Account.create!(name: "foo")
+      ActsAsTenant.without_tenant do
+        expect(ActsAsTenant.test_tenant).to be_nil
+      end
+    ensure
+      ActsAsTenant.default_tenant = old_default_tenant
+    end
+
+    it "should reset test_tenant to the previous tenant once exiting the block" do
+      ActsAsTenant.test_tenant = account
+      ActsAsTenant.without_tenant {}
+      expect(ActsAsTenant.test_tenant).to eq(account)
     end
 
     it "should return the value of the block" do

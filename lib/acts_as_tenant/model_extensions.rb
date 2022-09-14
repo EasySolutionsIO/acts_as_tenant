@@ -16,7 +16,7 @@ module ActsAsTenant
         belongs_to tenant, **valid_options
 
         default_scope lambda {
-          if ActsAsTenant.configuration.require_tenant && ActsAsTenant.current_tenant.nil? && !ActsAsTenant.unscoped?
+          if ActsAsTenant.should_require_tenant? && ActsAsTenant.current_tenant.nil? && !ActsAsTenant.unscoped?
             raise ActsAsTenant::Errors::NoTenantSet
           end
 
@@ -24,9 +24,15 @@ module ActsAsTenant
             keys = [ActsAsTenant.current_tenant.send(pkey)].compact
             keys.push(nil) if options[:has_global_records]
 
-            query_criteria = {fkey.to_sym => keys}
-            query_criteria[polymorphic_type.to_sym] = ActsAsTenant.current_tenant.class.to_s if options[:polymorphic]
-            where(query_criteria)
+            if options[:through]
+              query_criteria = {options[:through] => {fkey.to_sym => keys}}
+              query_criteria[polymorphic_type.to_sym] = ActsAsTenant.current_tenant.class.to_s if options[:polymorphic]
+              joins(options[:through]).where(query_criteria)
+            else
+              query_criteria = {fkey.to_sym => keys}
+              query_criteria[polymorphic_type.to_sym] = ActsAsTenant.current_tenant.class.to_s if options[:polymorphic]
+              where(query_criteria)
+            end
           else
             all
           end
@@ -81,7 +87,7 @@ module ActsAsTenant
             model
           end
 
-          define_method "tenant_modified?" do
+          define_method :tenant_modified? do
             will_save_change_to_attribute?(fkey) && persisted? && attribute_in_database(fkey).present?
           end
         }

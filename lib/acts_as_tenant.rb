@@ -14,7 +14,6 @@ module ActsAsTenant
   @@models_with_global_records = []
 
   class << self
-    attr_accessor :test_tenant
     attr_writer :default_tenant
   end
 
@@ -64,6 +63,14 @@ module ActsAsTenant
     RequestStore.store[:current_tenant] || test_tenant || default_tenant
   end
 
+  def self.test_tenant=(tenant)
+    Thread.current[:test_tenant] = tenant
+  end
+
+  def self.test_tenant
+    Thread.current[:test_tenant]
+  end
+
   def self.unscoped=(unscoped)
     RequestStore.store[:acts_as_tenant_unscoped] = unscoped
   end
@@ -99,15 +106,26 @@ module ActsAsTenant
     end
 
     old_tenant = current_tenant
+    old_test_tenant = test_tenant
     old_unscoped = unscoped
 
     self.current_tenant = nil
+    self.test_tenant = nil
     self.unscoped = true
     value = block.call
     value
   ensure
     self.current_tenant = old_tenant
+    self.test_tenant = old_test_tenant
     self.unscoped = old_unscoped
+  end
+
+  def self.should_require_tenant?
+    if configuration.require_tenant.respond_to?(:call)
+      !!configuration.require_tenant.call
+    else
+      !!configuration.require_tenant
+    end
   end
 end
 
